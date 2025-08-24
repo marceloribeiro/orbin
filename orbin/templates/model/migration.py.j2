@@ -26,9 +26,9 @@ def upgrade() -> None:
         sa.Column('id', sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-{%- for attr in attributes %}
+{% for attr in attributes %}
         sa.Column('{{ attr.name }}', sa.{{ attr.sqlalchemy_type }}{% if not attr.nullable %}, nullable=False{% endif %}),
-{%- endfor %}
+{% endfor %}
     )
 
 
