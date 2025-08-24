@@ -1,1 +1,0 @@
-"""Application package for model_test_app."""
