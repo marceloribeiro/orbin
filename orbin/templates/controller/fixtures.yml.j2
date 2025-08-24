@@ -1,0 +1,7 @@
+{{ controller_name }}:
+{%- for i in range(3) %}
+  {{ model_name }}_{{ loop.index }}:
+{%- for attr in model_attributes %}
+    {{ attr.name }}: {{ attr.fixture_value(loop.index) }}
+{%- endfor %}
+{%- endfor %}

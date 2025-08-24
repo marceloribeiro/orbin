@@ -37,6 +37,9 @@ class ResourceGenerator(BaseGenerator):
         self.actions = ["index", "show", "create", "update", "destroy"]
         
         super().__init__(self.model_name, target_dir)
+        
+        # Override output path to current directory, not model subdirectory
+        self.output_path = self.target_dir
     
     def _singularize_model_name(self, name: str) -> str:
         """Convert model name to singular form."""
@@ -82,30 +85,52 @@ class ResourceGenerator(BaseGenerator):
             return False
         
         try:
-            # Extract model attributes for better test generation
+            # Extract model attributes for better template generation
             model_attributes = self._extract_model_attributes()
             
-            # Use the controller generator to create the RESTful controller
-            controller_generator = ControllerGenerator(
-                controller_name=self.controller_name,
-                actions=self.actions,
-                target_dir=self.target_dir
-            )
+            # Build context for template rendering
+            context = {
+                "model_name": self.model_name,
+                "class_name": self.class_name + "Controller",
+                "model_class_name": self.class_name,
+                "controller_name": self.controller_name,
+                "route_prefix": f"/{self.controller_name}",
+                "actions": self.actions,
+                "model_attributes": model_attributes,
+                "timestamp": datetime.now().isoformat(),
+                "year": datetime.now().year,
+            }
             
-            # Update context with model attributes for test generation
-            controller_generator.context["model_attributes"] = model_attributes
+            # Generate controller using resource-specific template
+            controller_file = f"app/controllers/{self.controller_name}_controller.py"
+            self.copy_template_file("controller/resource_controller.py.j2", controller_file, context)
             
-            # Generate the controller using the existing generator
-            controller_generator.generate()
+            # Generate comprehensive test file
+            test_file = f"tests/controllers/test_{self.controller_name}_controller.py"
+            self.copy_template_file("controller/test_controller.py.j2", test_file, context)
             
-            # Update the generated controller to be model-aware
-            self._update_controller_for_model()
+            # Generate fixtures file
+            fixtures_file = f"tests/fixtures/{self.controller_name}.yml"
+            self._generate_fixtures(model_attributes, fixtures_file)
+            
+            # Add route to routes/__init__.py
+            self.add_route_to_app(self.controller_name, self.controller_name)
             
             print(f"✅ Successfully generated RESTful controller for '{self.class_name}' model!")
+            print(f"📄 Controller file: {controller_file}")
+            print(f"� Test file: {test_file}")
+            print(f"📄 Fixtures file: {fixtures_file}")
+            print()
+            print("🛣️  Generated routes:")
+            print(f"   GET    /{self.controller_name}                      → index()")
+            print(f"   GET    /{self.controller_name}/{{id}}                 → show()")
+            print(f"   POST   /{self.controller_name}                      → create()")
+            print(f"   PUT    /{self.controller_name}/{{id}}                 → update()")
+            print(f"   DELETE /{self.controller_name}/{{id}}                 → destroy()")
             print()
             print("🚀 Next steps:")
-            print("   1. Implement business logic in the controller")
-            print("   2. Customize Pydantic schemas as needed")
+            print("   1. Review and customize the generated controller")
+            print("   2. Update Pydantic schemas as needed")
             print("   3. Run tests: orbin test")
             print("   4. Start the server: orbin server")
             
@@ -208,7 +233,7 @@ class ResourceGenerator(BaseGenerator):
         print(f"📄 Updated controller with {self.class_name} model integration")
     
     def _extract_model_attributes(self):
-        """Extract attributes from the existing model file for test generation."""
+        """Extract attributes from the existing model file for template generation."""
         model_file = Path.cwd() / "app" / "models" / f"{self.model_name}.py"
         
         if not model_file.exists():
@@ -218,24 +243,33 @@ class ResourceGenerator(BaseGenerator):
             content = model_file.read_text()
             attributes = []
             
-            # Simple regex to find Column definitions
+            # Enhanced regex to find Column definitions with better type extraction
             import re
-            column_pattern = r'(\w+)\s*=\s*Column\((\w+)(?:\([^)]*\))?\)'
+            column_pattern = r'(\w+)\s*=\s*Column\((\w+)(?:\(([^)]*)\))?'
             matches = re.findall(column_pattern, content)
             
             for match in matches:
-                attr_name, attr_type = match
+                attr_name, attr_type, attr_params = match
                 # Skip standard fields
                 if attr_name in ['id', 'created_at', 'updated_at']:
                     continue
                 
-                # Generate test values based on type
+                # Get type info
+                pydantic_type = self._get_pydantic_type(attr_type)
                 test_value = self._get_test_value_for_type(attr_type)
+                test_value_alt = self._get_alt_test_value_for_type(attr_type)
+                
+                # Check if required (nullable=False or no nullable specified)
+                is_required = 'nullable=False' in attr_params or ('nullable' not in attr_params and attr_type != 'Text')
                 
                 attributes.append({
                     'name': attr_name,
                     'type': attr_type,
-                    'test_value': test_value
+                    'pydantic_type': pydantic_type,
+                    'test_value': test_value,
+                    'test_value_alt': test_value_alt,
+                    'required': is_required,
+                    'fixture_value': lambda i, val=test_value: self._get_fixture_value(val, i)
                 })
             
             return attributes
@@ -243,19 +277,79 @@ class ResourceGenerator(BaseGenerator):
             print(f"⚠️  Warning: Could not extract model attributes: {e}")
             return []
     
+    def _get_pydantic_type(self, sql_type: str) -> str:
+        """Map SQLAlchemy types to Pydantic types."""
+        type_mapping = {
+            'String': 'str',
+            'Integer': 'int',
+            'Float': 'float',
+            'Boolean': 'bool',
+            'Text': 'str',
+            'DateTime': 'str',  # We'll use ISO strings
+            'Date': 'str',
+            'Time': 'str',
+            'JSON': 'dict',
+            'Numeric': 'float',
+        }
+        return type_mapping.get(sql_type, 'str')
+    
     def _get_test_value_for_type(self, attr_type: str) -> str:
         """Get appropriate test value for attribute type."""
         type_mapping = {
-            'String': '"test_string"',
-            'Integer': '123',
+            'String': '"test_value"',
+            'Integer': '42',
             'Float': '12.34',
             'Boolean': 'True',
             'Text': '"test_text_content"',
-            'DateTime': '"2023-01-01T00:00:00"',
+            'DateTime': '"2023-01-01T12:00:00"',
             'Date': '"2023-01-01"',
             'Time': '"12:00:00"',
             'JSON': '{"key": "value"}',
             'Numeric': '99.99',
         }
-        
         return type_mapping.get(attr_type, '"test_value"')
+    
+    def _get_alt_test_value_for_type(self, attr_type: str) -> str:
+        """Get alternative test value for updates."""
+        type_mapping = {
+            'String': '"updated_value"',
+            'Integer': '84',
+            'Float': '56.78',
+            'Boolean': 'False',
+            'Text': '"updated_text_content"',
+            'DateTime': '"2023-12-31T12:00:00"',
+            'Date': '"2023-12-31"',
+            'Time': '"18:00:00"',
+            'JSON': '{"updated": "value"}',
+            'Numeric': '199.99',
+        }
+        return type_mapping.get(attr_type, '"updated_value"')
+    
+    def _get_fixture_value(self, base_value: str, index: int) -> str:
+        """Generate fixture values with variations."""
+        if base_value.startswith('"') and base_value.endswith('"'):
+            # String value
+            base = base_value.strip('"')
+            return f'"{base}_{index}"'
+        elif base_value.isdigit():
+            # Integer
+            return str(int(base_value) + index)
+        else:
+            return base_value
+    
+    def _generate_fixtures(self, model_attributes, fixtures_file):
+        """Generate YAML fixtures for the model."""
+        fixtures_content = f"{self.controller_name}:\n"
+        
+        for i in range(1, 4):  # Generate 3 sample records
+            fixtures_content += f"  {self.model_name}_{i}:\n"
+            for attr in model_attributes:
+                value = self._get_fixture_value(attr['test_value'], i)
+                # Remove quotes for YAML 
+                if value.startswith('"') and value.endswith('"'):
+                    value = value[1:-1]
+                fixtures_content += f"    {attr['name']}: \"{value}\"\n"
+            fixtures_content += "\n"
+        
+        # Write fixtures file
+        self.write_file(fixtures_file, fixtures_content.rstrip())

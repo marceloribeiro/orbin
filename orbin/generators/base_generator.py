@@ -204,7 +204,7 @@ class BaseGenerator:
         
         # Check if import already exists
         import_line = f"from app.controllers.{controller_name}_controller import router as {route_name}_router"
-        include_line = f'router.include_router({route_name}_router, prefix="/{route_name}", tags=["{route_name}"])'
+        include_line = f'router.include_router({route_name}_router)'
         
         if import_line in content:
             print(f"📄 Route already imported: {controller_name}_controller")

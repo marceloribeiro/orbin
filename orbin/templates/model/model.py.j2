@@ -20,9 +20,8 @@ class {{ class_name }}(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
     
     # Custom attributes
-{%- for attr in attributes %}
-    {{ attr.name }} = Column({{ attr.sqlalchemy_type }}{% if not attr.nullable %}, nullable=False{% endif %})
-{%- endfor %}
+{% for attr in attributes %}    {{ attr.name }} = Column({{ attr.sqlalchemy_type }}{% if not attr.nullable %}, nullable=False{% endif %})
+{% endfor %}
     
     def __repr__(self):
         return f"<{{ class_name }}(id={self.id}{% if attributes and attributes[0] %}, {{ attributes[0].name }}={getattr(self, '{{ attributes[0].name }}', None)}{% endif %})>"
@@ -33,7 +32,5 @@ class {{ class_name }}(Base):
             'id': str(self.id),
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-{%- for attr in attributes %}
-            '{{ attr.name }}': self.{{ attr.name }},
-{%- endfor %}
-        }
+{% for attr in attributes %}            '{{ attr.name }}': self.{{ attr.name }},
+{% endfor %}        }

@@ -84,7 +84,9 @@ class AppGenerator(BaseGenerator):
             "config",
             "db",
             "db/migrations",
-            "tests"
+            "tests",
+            "tests/controllers",
+            "tests/fixtures"
         ]
         
         for directory in directories:
