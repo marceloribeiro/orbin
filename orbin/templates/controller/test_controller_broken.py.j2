@@ -1,0 +1,391 @@
+"""
+Tests for {{ class_name }}.
+"""
+
+import pytest
+import os
+import yaml
+import uuid
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+
+from app.main import app
+from config.database import get_db, Base
+{%- if model_name %}
+from app.models.{{ model_name }} import {{ model_class_name }}
+{%- endif %}
+
+# Load environment variables
+load_dotenv()
+
+# Create test database engine
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    raise ValueError("TEST_DATABASE_URL not found in environment variables")
+
+engine = create_engine(TEST_DATABASE_URL)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def override_get_db():
+    """Override database dependency for testing."""
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+
+app.dependency_overrides[get_db] = override_get_db
+
+client = TestClient(app)
+
+{%- if model_name %}
+
+
+def load_fixtures():
+    """Load {{ model_name }} fixtures from YAML file."""
+    fixtures_path = os.path.join(os.path.dirname(__file__), "..", "fixtures", "{{ controller_name }}.yml")
+    with open(fixtures_path, 'r') as file:
+        return yaml.safe_load(file)
+
+
+@pytest.fixture(scope="function")
+def db_session():
+    """Create a fresh database session for each test."""
+    # Create tables
+    Base.metadata.create_all(bind=engine)
+    
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+        # Clean up - drop all tables after test
+        Base.metadata.drop_all(bind=engine)
+
+
+@pytest.fixture(scope="function")
+def sample_{{ controller_name }}(db_session):
+    """Create sample {{ controller_name }} from fixtures."""
+    fixtures = load_fixtures()
+    items = []
+    
+    for item_key, item_data in fixtures['{{ controller_name }}'].items():
+        item = {{ model_class_name }}(
+            {%- for attr in model_attributes %}
+            {{ attr.name }}=item_data['{{ attr.name }}'],
+            {%- endfor %}
+        )
+        db_session.add(item)
+        items.append(item)
+    
+    db_session.commit()
+    
+    # Refresh to get IDs
+    for item in items:
+        db_session.refresh(item)
+    
+    return items
+
+
+class Test{{ class_name }}:
+    """Test class for {{ class_name }}."""
+
+    def test_index_{{ controller_name }}_empty(self, db_session):
+        """Test listing {{ controller_name }} when database is empty."""
+        response = client.get("/{{ controller_name }}")
+        assert response.status_code == 200
+        assert response.json() == []
+
+    def test_index_{{ controller_name }}_with_data(self, sample_{{ controller_name }}):
+        """Test listing {{ controller_name }} with sample data."""
+        response = client.get("/{{ controller_name }}")
+        assert response.status_code == 200
+        
+        items = response.json()
+        assert len(items) == len(sample_{{ controller_name }})
+        
+        # Check first item structure
+        item = items[0]
+        assert "id" in item
+        {%- for attr in model_attributes %}
+        assert "{{ attr.name }}" in item
+        {%- endfor %}
+        assert "created_at" in item
+        assert "updated_at" in item
+
+    def test_show_{{ model_name }}_exists(self, sample_{{ controller_name }}):
+        """Test getting a specific {{ model_name }} that exists."""
+        item = sample_{{ controller_name }}[0]
+        response = client.get(f"/{{ controller_name }}/{item.id}")
+        assert response.status_code == 200
+        
+        item_data = response.json()
+        {%- for attr in model_attributes %}
+        assert item_data["{{ attr.name }}"] == item.{{ attr.name }}
+        {%- endfor %}
+
+    def test_show_{{ model_name }}_not_found(self, db_session):
+        """Test getting a {{ model_name }} that doesn't exist."""
+        fake_id = str(uuid.uuid4())
+        response = client.get(f"/{{ controller_name }}/{fake_id}")
+        assert response.status_code == 404
+        assert "{{ model_class_name }} not found" in response.json()["detail"]
+
+    def test_create_{{ model_name }}_valid_data(self, db_session):
+        """Test creating a {{ model_name }} with valid data."""
+        item_data = {
+            {%- for attr in model_attributes %}
+            "{{ attr.name }}": {{ attr.test_value }},
+            {%- endfor %}
+        }
+        
+        response = client.post("/{{ controller_name }}", json=item_data)
+        assert response.status_code == 200
+        
+        created_item = response.json()
+        {%- for attr in model_attributes %}
+        assert created_item["{{ attr.name }}"] == item_data["{{ attr.name }}"]
+        {%- endfor %}
+        assert "id" in created_item
+        assert "created_at" in created_item
+        assert "updated_at" in created_item
+
+    def test_create_{{ model_name }}_missing_required_fields(self, db_session):
+        """Test creating a {{ model_name }} with missing required fields."""
+        item_data = {
+            # Missing required fields
+        }
+        
+        response = client.post("/{{ controller_name }}", json=item_data)
+        assert response.status_code == 422  # Validation error
+
+    def test_update_{{ model_name }}_exists(self, sample_{{ controller_name }}):
+        """Test updating a {{ model_name }} that exists."""
+        item = sample_{{ controller_name }}[0]
+        {%- set first_attr = model_attributes[0] if model_attributes else None %}
+        {%- if first_attr %}
+        update_data = {
+            "{{ first_attr.name }}": {{ first_attr.test_value_alt if first_attr.test_value_alt else first_attr.test_value }}
+        }
+        {%- else %}
+        update_data = {}
+        {%- endif %}
+        
+        response = client.put(f"/{{ controller_name }}/{item.id}", json=update_data)
+        assert response.status_code == 200
+        
+        updated_item = response.json()
+        {%- if first_attr %}
+        assert updated_item["{{ first_attr.name }}"] == update_data["{{ first_attr.name }}"]
+        {%- endif %}
+
+    def test_update_{{ model_name }}_not_found(self, db_session):
+        """Test updating a {{ model_name }} that doesn't exist."""
+        fake_id = str(uuid.uuid4())
+        {%- if model_attributes %}
+        update_data = {"{{ model_attributes[0].name }}": {{ model_attributes[0].test_value }}}
+        {%- else %}
+        update_data = {}
+        {%- endif %}
+        
+        response = client.put(f"/{{ controller_name }}/{fake_id}", json=update_data)
+        assert response.status_code == 404
+        assert "{{ model_class_name }} not found" in response.json()["detail"]
+
+    def test_delete_{{ model_name }}_exists(self, sample_{{ controller_name }}):
+        """Test deleting a {{ model_name }} that exists."""
+        item = sample_{{ controller_name }}[0]
+        response = client.delete(f"/{{ controller_name }}/{item.id}")
+        assert response.status_code == 200
+        
+        result = response.json()
+        assert "message" in result
+        assert "{{ model_class_name }} deleted successfully" in result["message"]
+        assert result["id"] == str(item.id)
+        
+        # Verify item is actually deleted
+        get_response = client.get(f"/{{ controller_name }}/{item.id}")
+        assert get_response.status_code == 404
+
+    def test_delete_{{ model_name }}_not_found(self, db_session):
+        """Test deleting a {{ model_name }} that doesn't exist."""
+        fake_id = str(uuid.uuid4())
+        response = client.delete(f"/{{ controller_name }}/{fake_id}")
+        assert response.status_code == 404
+        assert "{{ model_class_name }} not found" in response.json()["detail"]
+
+    def test_{{ model_name }}_crud_workflow(self, db_session):
+        """Test complete CRUD workflow for a {{ model_name }}."""
+        # Create
+        item_data = {
+            {%- for attr in model_attributes %}
+            "{{ attr.name }}": {{ attr.test_value }},
+            {%- endfor %}
+        }
+        
+        create_response = client.post("/{{ controller_name }}", json=item_data)
+        assert create_response.status_code == 200
+        created_item = create_response.json()
+        item_id = created_item["id"]
+        
+        # Read
+        get_response = client.get(f"/{{ controller_name }}/{item_id}")
+        assert get_response.status_code == 200
+        {%- if model_attributes %}
+        assert get_response.json()["{{ model_attributes[0].name }}"] == item_data["{{ model_attributes[0].name }}"]
+        {%- endif %}
+        
+        # Update
+        {%- if model_attributes %}
+        update_data = {"{{ model_attributes[0].name }}": {{ model_attributes[0].test_value_alt if model_attributes[0].test_value_alt else model_attributes[0].test_value }}}
+        update_response = client.put(f"/{{ controller_name }}/{item_id}", json=update_data)
+        assert update_response.status_code == 200
+        assert update_response.json()["{{ model_attributes[0].name }}"] == update_data["{{ model_attributes[0].name }}"]
+        {%- endif %}
+        
+        # Delete
+        delete_response = client.delete(f"/{{ controller_name }}/{item_id}")
+        assert delete_response.status_code == 200
+        
+        # Verify deletion
+        final_get_response = client.get(f"/{{ controller_name }}/{item_id}")
+        assert final_get_response.status_code == 404
+
+{%- else %}
+
+
+class Test{{ class_name }}:
+    """Test class for {{ class_name }}."""
+
+    def test_placeholder(self):
+        """Placeholder test for custom controller."""
+        # TODO: Implement tests for custom controller actions
+        assert True
+{%- endif %}
+
+import pytest
+import os
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+
+from app.main import app
+from config.database import get_db, Base
+
+# Load environment variables
+load_dotenv()
+
+# Create test database engine
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    raise ValueError("TEST_DATABASE_URL not found in environment variables")
+
+engine = create_engine(TEST_DATABASE_URL)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def override_get_db():
+    """Override database dependency for testing."""
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+
+# Override the dependency
+app.dependency_overrides[get_db] = override_get_db
+
+client = TestClient(app)
+
+
+class Test{{ class_name }}:
+    """Test class for {{ class_name }}."""
+    
+    def setup_method(self):
+        """Set up test data before each test."""
+        # Clear all tables in test database
+        # Note: Run 'orbin db-test-prepare' to ensure test database has proper schema
+        pass
+{% if has_index %}
+    
+    def test_index_{{ controller_name }}(self):
+        """Test GET {{ route_prefix }} - list all {{ controller_name }}."""
+        response = client.get("{{ route_prefix }}")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+{% endif %}
+{% if has_show %}
+    
+    def test_show_{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}(self):
+        """Test GET {{ route_prefix }}/{id} - get specific {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}."""
+        # TODO: Create test {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} first
+        test_id = "00000000-0000-0000-0000-000000000001"
+        response = client.get(f"{{ route_prefix }}/{test_id}")
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 404]
+{% endif %}
+{% if has_create %}
+    
+    def test_create_{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}(self):
+        """Test POST {{ route_prefix }} - create new {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}."""
+        test_data = {
+            # TODO: Add required fields for creating {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}
+{% if model_attributes %}
+{% for attr in model_attributes %}
+            "{{ attr.name }}": {{ attr.test_value }},
+{% endfor %}
+{% else %}
+            "name": "Test {{ class_name }}"
+{% endif %}
+        }
+        response = client.post("{{ route_prefix }}", json=test_data)
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 201, 422]
+{% endif %}
+{% if has_update %}
+    
+    def test_update_{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}(self):
+        """Test PUT {{ route_prefix }}/{id} - update specific {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}."""
+        # TODO: Create test {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} first
+        test_id = "00000000-0000-0000-0000-000000000001"
+        update_data = {
+            # TODO: Add fields to update
+{% if model_attributes %}
+{% for attr in model_attributes %}
+            "{{ attr.name }}": {{ attr.test_value }},
+{% endfor %}
+{% else %}
+            "name": "Updated {{ class_name }}"
+{% endif %}
+        }
+        response = client.put(f"{{ route_prefix }}/{test_id}", json=update_data)
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 404, 422]
+{% endif %}
+{% if has_destroy %}
+    
+    def test_destroy_{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}(self):
+        """Test DELETE {{ route_prefix }}/{id} - delete specific {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}."""
+        # TODO: Create test {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} first
+        test_id = "00000000-0000-0000-0000-000000000001"
+        response = client.delete(f"{{ route_prefix }}/{test_id}")
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 204, 404]
+{% endif %}
+{% if custom_actions %}
+{% for action in custom_actions %}
+    
+    def test_{{ action.function_name }}(self):
+        """Test {{ action.method }} {{ route_prefix }}{{ action.path }} - {{ action.description }}."""
+        {% if action.method == 'GET' %}response = client.get("{{ route_prefix }}{{ action.path }}"){% elif action.method == 'POST' %}response = client.post("{{ route_prefix }}{{ action.path }}", json={}){% elif action.method == 'PUT' %}response = client.put("{{ route_prefix }}{{ action.path }}", json={}){% elif action.method == 'DELETE' %}response = client.delete("{{ route_prefix }}{{ action.path }}"){% else %}response = client.{{ action.method.lower() }}("{{ route_prefix }}{{ action.path }}"){% endif %}
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 201, 204, 404, 422]
+{% endfor %}
+{% endif %}
