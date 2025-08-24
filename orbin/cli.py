@@ -136,6 +136,50 @@ def db_test_prepare():
         sys.exit(1)
 
 
+def db_console():
+    """Open an interactive database console using psql."""
+    if not is_orbin_app():
+        print("❌ Error: Not in an Orbin application directory")
+        print("Run this command from within an Orbin app directory")
+        sys.exit(1)
+    
+    # Load database URL from environment
+    from dotenv import load_dotenv
+    load_dotenv(Path.cwd() / ".env")
+    
+    database_url = os.getenv("DATABASE_URL")
+    if not database_url:
+        print("❌ Error: DATABASE_URL not found in environment variables or .env file")
+        print("💡 Tip: Make sure your .env file contains DATABASE_URL")
+        sys.exit(1)
+    
+    app_name = get_app_name()
+    print(f"🗃️  Opening database console for {app_name}")
+    print("💡 Type \\q to exit the console")
+    print("📚 Common commands: \\dt (list tables), \\d table_name (describe table)")
+    print()
+    
+    try:
+        # Use psql to connect to the database
+        subprocess.run([
+            "psql", 
+            database_url
+        ], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error opening database console: {e}")
+        print("💡 Make sure PostgreSQL client (psql) is installed")
+        sys.exit(1)
+    except FileNotFoundError:
+        print("❌ Error: psql command not found")
+        print("💡 Please install PostgreSQL client tools:")
+        print("   - macOS: brew install postgresql")
+        print("   - Ubuntu: sudo apt-get install postgresql-client")
+        print("   - Windows: Download from https://www.postgresql.org/download/")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n👋 Database console closed")
+
+
 def start_server(bind: str = "127.0.0.1", port: int = 8000):
     """Start the development server."""
     if not is_orbin_app():
@@ -407,6 +451,7 @@ def main():
         db_create_parser = subparsers.add_parser("db-create", help="Create the PostgreSQL databases (development and test)")
         db_migrate_parser = subparsers.add_parser("db-migrate", help="Run database migrations")
         db_test_prepare_parser = subparsers.add_parser("db-test-prepare", help="Prepare test database as schema copy of development database")
+        db_console_parser = subparsers.add_parser("db", help="Open interactive database console (psql)")
         
         # Version command
         version_parser = subparsers.add_parser("version", help="Show Orbin version")
@@ -465,6 +510,8 @@ def main():
         db_migrate()
     elif args.command == "db-test-prepare":
         db_test_prepare()
+    elif args.command == "db":
+        db_console()
     elif args.command == "version":
         from . import __version__
         print(f"Orbin {__version__}")
