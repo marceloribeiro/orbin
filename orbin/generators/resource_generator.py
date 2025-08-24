@@ -189,15 +189,16 @@ class ResourceGenerator(BaseGenerator):
         )
         
         # Fix return type annotations to use correct schema names
-        old_response_name = self.controller_name.title().replace('s', '') + 'Response'  # ProductsResponse
-        new_response_name = f"{self.class_name}Response"  # ProductResponse
+        # The controller template uses pluralized names like UsersResponse, but we want UserResponse
+        old_response_name = self.controller_name.title() + 'Response'  # UsersResponse
+        new_response_name = f"{self.class_name}Response"  # UserResponse
         
         content = content.replace(f"-> List[{old_response_name}]:", f"-> List[{new_response_name}]:")
         content = content.replace(f"-> {old_response_name}:", f"-> {new_response_name}:")
         
         # Fix parameter type annotations
-        old_create_name = self.controller_name.title().replace('s', '') + 'Create'
-        old_update_name = self.controller_name.title().replace('s', '') + 'Update'
+        old_create_name = self.controller_name.title() + 'Create'  # UsersCreate
+        old_update_name = self.controller_name.title() + 'Update'  # UsersUpdate
         
         content = content.replace(f": {old_create_name},", f": {self.class_name}Create,")
         content = content.replace(f": {old_update_name},", f": {self.class_name}Update,")
