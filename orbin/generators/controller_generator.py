@@ -151,11 +151,30 @@ class ControllerGenerator(BaseGenerator):
     
     def _build_context(self) -> Dict[str, Any]:
         """Build the template context for controller generation."""
+        # Determine which standard actions are present
+        action_names = [action['name'] for action in self.actions]
+        has_index = 'index' in action_names
+        has_show = 'show' in action_names
+        has_create = 'create' in action_names
+        has_update = 'update' in action_names
+        has_destroy = 'destroy' in action_names
+        
+        # Get custom actions (non-RESTful)
+        rest_actions = {'index', 'show', 'create', 'update', 'destroy'}
+        custom_actions = [action for action in self.actions if action['name'] not in rest_actions]
+        
         return {
             "controller_name": self.controller_name,
             "class_name": self.class_name,
             "route_prefix": self.route_prefix,
             "actions": self.actions,
+            "has_index": has_index,
+            "has_show": has_show,
+            "has_create": has_create,
+            "has_update": has_update,
+            "has_destroy": has_destroy,
+            "custom_actions": custom_actions,
+            "model_attributes": [],  # Will be populated by resource generator
             "timestamp": datetime.now().isoformat(),
             "year": datetime.now().year,
         }
@@ -167,6 +186,9 @@ class ControllerGenerator(BaseGenerator):
         try:
             # Generate controller file
             self._generate_controller()
+            
+            # Generate test file
+            self._generate_test()
             
             # Update controllers __init__.py
             self._update_controllers_init()
@@ -187,6 +209,24 @@ class ControllerGenerator(BaseGenerator):
             "controller/controller.py.j2",
             f"app/controllers/{self.controller_name}_controller.py"
         )
+    
+    def _generate_test(self):
+        """Generate the test file for the controller."""
+        # Ensure tests/controllers directory exists
+        tests_controllers_dir = Path.cwd() / "tests" / "controllers"
+        tests_controllers_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create __init__.py in tests/controllers if it doesn't exist
+        init_file = tests_controllers_dir / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text('"""Controller tests package."""\n')
+        
+        # Generate the test file
+        self.copy_template_file(
+            "controller/test_controller.py.j2",
+            f"tests/controllers/test_{self.controller_name}_controller.py"
+        )
+        print(f"📄 Created test file: tests/controllers/test_{self.controller_name}_controller.py")
     
     def _update_controllers_init(self):
         """Update the controllers __init__.py file to include the new controller."""
@@ -236,6 +276,7 @@ class ControllerGenerator(BaseGenerator):
         """Show success message with routes and next steps."""
         print(f"✅ Successfully generated controller '{self.class_name}'!")
         print(f"📄 Controller file: app/controllers/{self.controller_name}_controller.py")
+        print(f"📄 Test file: tests/controllers/test_{self.controller_name}_controller.py")
         print()
         print("🛣️  Generated routes:")
         for action in self.actions:
@@ -249,4 +290,5 @@ class ControllerGenerator(BaseGenerator):
         print("🚀 Next steps:")
         print("   1. Implement the action logic in the controller")
         print("   2. Customize Pydantic schemas as needed")
-        print("   3. Start the server: orbin server")
+        print("   3. Run tests: orbin test")
+        print("   4. Start the server: orbin server")

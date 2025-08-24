@@ -15,7 +15,7 @@ from .generators.model_generator import ModelGenerator
 from .generators.controller_generator import ControllerGenerator
 from .generators.resource_generator import ResourceGenerator
 from .generators.scaffold_generator import ScaffoldGenerator
-from .database import create_database, migrate_database
+from .database import create_database, migrate_database, prepare_test_database
 
 
 def is_orbin_app() -> bool:
@@ -124,6 +124,18 @@ def db_migrate():
         sys.exit(1)
 
 
+def db_test_prepare():
+    """Prepare test database by recreating it as a schema copy of development database."""
+    if not is_orbin_app():
+        print("❌ Error: Not in an Orbin application directory")
+        print("Run this command from within an Orbin app directory")
+        sys.exit(1)
+    
+    success = prepare_test_database()
+    if not success:
+        sys.exit(1)
+
+
 def start_server(bind: str = "127.0.0.1", port: int = 8000):
     """Start the development server."""
     if not is_orbin_app():
@@ -151,6 +163,72 @@ def start_server(bind: str = "127.0.0.1", port: int = 8000):
         sys.exit(1)
     except KeyboardInterrupt:
         print("\n👋 Server stopped")
+
+
+def run_tests(test_path: Optional[str] = None, verbose: bool = False, skip_prepare: bool = False):
+    """Run tests using pytest."""
+    if not is_orbin_app():
+        print("❌ Error: Not in an Orbin application directory")
+        print("Run this command from within an Orbin app directory")
+        sys.exit(1)
+    
+    app_name = get_app_name()
+    print(f"🧪 Running tests for {app_name}")
+    
+    # Prepare test database unless skipped
+    if not skip_prepare:
+        print("🔄 Preparing test database...")
+        if not prepare_test_database():
+            print("❌ Failed to prepare test database")
+            sys.exit(1)
+        print()
+    
+    # Build pytest command
+    cmd = [sys.executable, "-m", "pytest"]
+    
+    # Add test path or default to tests directory
+    if test_path:
+        cmd.append(test_path)
+    else:
+        tests_dir = Path.cwd() / "tests"
+        if tests_dir.exists():
+            cmd.append("tests/")
+        else:
+            print("❌ Error: tests/ directory not found")
+            print("💡 Tip: Generate some controllers to create tests")
+            sys.exit(1)
+    
+    # Add verbose flag if requested
+    if verbose:
+        cmd.extend(["-v", "--tb=short"])
+    else:
+        cmd.extend(["--tb=short"])
+    
+    # Add coverage if available
+    try:
+        import pytest_cov
+        cmd.extend(["--cov=app", "--cov-report=term-missing"])
+        print("📊 Running with coverage analysis")
+    except ImportError:
+        print("💡 Tip: Install pytest-cov for coverage reports: pip install pytest-cov")
+    
+    print(f"🔍 Command: {' '.join(cmd[2:])}")
+    print()
+    
+    try:
+        # Run pytest
+        result = subprocess.run(cmd, check=False)
+        if result.returncode == 0:
+            print("\n✅ All tests passed!")
+        else:
+            print(f"\n❌ Tests failed with exit code {result.returncode}")
+            sys.exit(result.returncode)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error running tests: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n👋 Tests interrupted")
+        sys.exit(1)
 
 
 def start_console():
@@ -277,6 +355,28 @@ def main():
             help="Start interactive Python console with app context"
         )
         
+        # Test command
+        test_parser = subparsers.add_parser(
+            "test",
+            aliases=["t"],
+            help="Run tests using pytest"
+        )
+        test_parser.add_argument(
+            "test_path",
+            nargs="?",
+            help="Specific test file or directory (defaults to tests/)"
+        )
+        test_parser.add_argument(
+            "-v", "--verbose",
+            action="store_true",
+            help="Run tests in verbose mode"
+        )
+        test_parser.add_argument(
+            "--skip-prepare",
+            action="store_true",
+            help="Skip test database preparation (faster for repeated test runs)"
+        )
+        
         # Generate command group
         generate_parser = subparsers.add_parser("generate", aliases=["g"], help="Generate code")
         generate_subparsers = generate_parser.add_subparsers(dest="generate_type", help="What to generate")
@@ -304,8 +404,9 @@ def main():
         scaffold_parser.add_argument("attributes", nargs="*", help="Model attributes (e.g., name:string email:string)")
         
         # Database commands
-        db_create_parser = subparsers.add_parser("db-create", help="Create the PostgreSQL database")
+        db_create_parser = subparsers.add_parser("db-create", help="Create the PostgreSQL databases (development and test)")
         db_migrate_parser = subparsers.add_parser("db-migrate", help="Run database migrations")
+        db_test_prepare_parser = subparsers.add_parser("db-test-prepare", help="Prepare test database as schema copy of development database")
         
         # Version command
         version_parser = subparsers.add_parser("version", help="Show Orbin version")
@@ -342,6 +443,8 @@ def main():
         start_server(args.bind, args.port)
     elif args.command in ["console", "c"]:
         start_console()
+    elif args.command in ["test", "t"]:
+        run_tests(args.test_path, args.verbose, args.skip_prepare)
     elif args.command in ["generate", "g"]:
         if args.generate_type == "model":
             generate_model(args.model_name, args.attributes)
@@ -360,6 +463,8 @@ def main():
         db_create()
     elif args.command == "db-migrate":
         db_migrate()
+    elif args.command == "db-test-prepare":
+        db_test_prepare()
     elif args.command == "version":
         from . import __version__
         print(f"Orbin {__version__}")

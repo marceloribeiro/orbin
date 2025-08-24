@@ -1,0 +1,126 @@
+"""
+Tests for {{ class_name }}.
+"""
+
+import pytest
+import os
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from dotenv import load_dotenv
+
+from app.main import app
+from config.database import get_db, Base
+
+# Load environment variables
+load_dotenv()
+
+# Create test database engine
+TEST_DATABASE_URL = os.getenv("TEST_DATABASE_URL")
+if not TEST_DATABASE_URL:
+    raise ValueError("TEST_DATABASE_URL not found in environment variables")
+
+engine = create_engine(TEST_DATABASE_URL)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def override_get_db():
+    """Override database dependency for testing."""
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+
+# Override the dependency
+app.dependency_overrides[get_db] = override_get_db
+
+client = TestClient(app)
+
+
+class Test{{ class_name }}:
+    """Test class for {{ class_name }}."""
+    
+    def setup_method(self):
+        """Set up test data before each test."""
+        # Clear all tables in test database
+        # Note: Run 'orbin db-test-prepare' to ensure test database has proper schema
+        pass
+{% if has_index %}
+    
+    def test_index_{{ controller_name }}(self):
+        """Test GET {{ route_prefix }} - list all {{ controller_name }}."""
+        response = client.get("{{ route_prefix }}")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+{% endif %}
+{% if has_show %}
+    
+    def test_show_{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}(self):
+        """Test GET {{ route_prefix }}/{id} - get specific {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}."""
+        # TODO: Create test {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} first
+        test_id = "00000000-0000-0000-0000-000000000001"
+        response = client.get(f"{{ route_prefix }}/{test_id}")
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 404]
+{% endif %}
+{% if has_create %}
+    
+    def test_create_{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}(self):
+        """Test POST {{ route_prefix }} - create new {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}."""
+        test_data = {
+            # TODO: Add required fields for creating {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}
+{% if model_attributes %}
+{% for attr in model_attributes %}
+            "{{ attr.name }}": {{ attr.test_value }},
+{% endfor %}
+{% else %}
+            "name": "Test {{ class_name }}"
+{% endif %}
+        }
+        response = client.post("{{ route_prefix }}", json=test_data)
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 201, 422]
+{% endif %}
+{% if has_update %}
+    
+    def test_update_{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}(self):
+        """Test PUT {{ route_prefix }}/{id} - update specific {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}."""
+        # TODO: Create test {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} first
+        test_id = "00000000-0000-0000-0000-000000000001"
+        update_data = {
+            # TODO: Add fields to update
+{% if model_attributes %}
+{% for attr in model_attributes %}
+            "{{ attr.name }}": {{ attr.test_value }},
+{% endfor %}
+{% else %}
+            "name": "Updated {{ class_name }}"
+{% endif %}
+        }
+        response = client.put(f"{{ route_prefix }}/{test_id}", json=update_data)
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 404, 422]
+{% endif %}
+{% if has_destroy %}
+    
+    def test_destroy_{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}(self):
+        """Test DELETE {{ route_prefix }}/{id} - delete specific {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}."""
+        # TODO: Create test {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} first
+        test_id = "00000000-0000-0000-0000-000000000001"
+        response = client.delete(f"{{ route_prefix }}/{test_id}")
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 204, 404]
+{% endif %}
+{% if custom_actions %}
+{% for action in custom_actions %}
+    
+    def test_{{ action.function_name }}(self):
+        """Test {{ action.method }} {{ route_prefix }}{{ action.path }} - {{ action.description }}."""
+        {% if action.method == 'GET' %}response = client.get("{{ route_prefix }}{{ action.path }}"){% elif action.method == 'POST' %}response = client.post("{{ route_prefix }}{{ action.path }}", json={}){% elif action.method == 'PUT' %}response = client.put("{{ route_prefix }}{{ action.path }}", json={}){% elif action.method == 'DELETE' %}response = client.delete("{{ route_prefix }}{{ action.path }}"){% else %}response = client.{{ action.method.lower() }}("{{ route_prefix }}{{ action.path }}"){% endif %}
+        # TODO: Update expected status code based on implementation
+        assert response.status_code in [200, 201, 204, 404, 422]
+{% endfor %}
+{% endif %}

@@ -82,12 +82,18 @@ class ResourceGenerator(BaseGenerator):
             return False
         
         try:
+            # Extract model attributes for better test generation
+            model_attributes = self._extract_model_attributes()
+            
             # Use the controller generator to create the RESTful controller
             controller_generator = ControllerGenerator(
                 controller_name=self.controller_name,
                 actions=self.actions,
                 target_dir=self.target_dir
             )
+            
+            # Update context with model attributes for test generation
+            controller_generator.context["model_attributes"] = model_attributes
             
             # Generate the controller using the existing generator
             controller_generator.generate()
@@ -100,7 +106,8 @@ class ResourceGenerator(BaseGenerator):
             print("🚀 Next steps:")
             print("   1. Implement business logic in the controller")
             print("   2. Customize Pydantic schemas as needed")
-            print("   3. Start the server: orbin server")
+            print("   3. Run tests: orbin test")
+            print("   4. Start the server: orbin server")
             
             return True
             
@@ -181,6 +188,73 @@ class ResourceGenerator(BaseGenerator):
             f"{self.model_name}_data: {self.class_name}Update"
         )
         
+        # Fix return type annotations to use correct schema names
+        old_response_name = self.controller_name.title().replace('s', '') + 'Response'  # ProductsResponse
+        new_response_name = f"{self.class_name}Response"  # ProductResponse
+        
+        content = content.replace(f"-> List[{old_response_name}]:", f"-> List[{new_response_name}]:")
+        content = content.replace(f"-> {old_response_name}:", f"-> {new_response_name}:")
+        
+        # Fix parameter type annotations
+        old_create_name = self.controller_name.title().replace('s', '') + 'Create'
+        old_update_name = self.controller_name.title().replace('s', '') + 'Update'
+        
+        content = content.replace(f": {old_create_name},", f": {self.class_name}Create,")
+        content = content.replace(f": {old_update_name},", f": {self.class_name}Update,")
+        
         # Write the updated content
         controller_file.write_text(content)
         print(f"📄 Updated controller with {self.class_name} model integration")
+    
+    def _extract_model_attributes(self):
+        """Extract attributes from the existing model file for test generation."""
+        model_file = Path.cwd() / "app" / "models" / f"{self.model_name}.py"
+        
+        if not model_file.exists():
+            return []
+        
+        try:
+            content = model_file.read_text()
+            attributes = []
+            
+            # Simple regex to find Column definitions
+            import re
+            column_pattern = r'(\w+)\s*=\s*Column\((\w+)(?:\([^)]*\))?\)'
+            matches = re.findall(column_pattern, content)
+            
+            for match in matches:
+                attr_name, attr_type = match
+                # Skip standard fields
+                if attr_name in ['id', 'created_at', 'updated_at']:
+                    continue
+                
+                # Generate test values based on type
+                test_value = self._get_test_value_for_type(attr_type)
+                
+                attributes.append({
+                    'name': attr_name,
+                    'type': attr_type,
+                    'test_value': test_value
+                })
+            
+            return attributes
+        except Exception as e:
+            print(f"⚠️  Warning: Could not extract model attributes: {e}")
+            return []
+    
+    def _get_test_value_for_type(self, attr_type: str) -> str:
+        """Get appropriate test value for attribute type."""
+        type_mapping = {
+            'String': '"test_string"',
+            'Integer': '123',
+            'Float': '12.34',
+            'Boolean': 'True',
+            'Text': '"test_text_content"',
+            'DateTime': '"2023-01-01T00:00:00"',
+            'Date': '"2023-01-01"',
+            'Time': '"12:00:00"',
+            'JSON': '{"key": "value"}',
+            'Numeric': '99.99',
+        }
+        
+        return type_mapping.get(attr_type, '"test_value"')

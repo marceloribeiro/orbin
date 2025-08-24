@@ -119,7 +119,8 @@ class ScaffoldGenerator(BaseGenerator):
             print("   1. Run migration: orbin db-migrate")
             print("   2. Implement business logic in the controller")
             print("   3. Customize Pydantic schemas as needed")
-            print("   4. Start the server: orbin server")
+            print("   4. Run tests: orbin test")
+            print("   5. Start the server: orbin server")
             
             return True
             
