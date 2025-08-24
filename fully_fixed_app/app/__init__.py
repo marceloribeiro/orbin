@@ -1,0 +1,1 @@
+"""Application package for fully_fixed_app."""

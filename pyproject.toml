@@ -34,6 +34,9 @@ dependencies = [
     "alembic>=1.12.1",
     "psycopg2-binary>=2.9.9",
     "python-dotenv>=1.0.0",
+    "ipython>=8.0.0",
+    "jinja2>=3.0.0",
+    "inflect>=7.0.0",
 ]
 
 [project.optional-dependencies]
@@ -57,6 +60,9 @@ orbin = "orbin.cli:main"
 where = ["."]
 include = ["orbin*"]
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+orbin = ["templates/**/*"]
 
 [tool.black]
 line-length = 88

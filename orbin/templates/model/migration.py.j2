@@ -1,0 +1,37 @@
+"""Create {{ table_name }} table
+
+Revision ID: {{ migration_timestamp }}
+Revises: {% if down_revision %}{{ down_revision }}{% endif %}
+
+Create Date: {{ timestamp }}
+
+"""
+from alembic import op
+import sqlalchemy as sa
+import uuid
+
+
+# revision identifiers, used by Alembic.
+revision = '{{ migration_timestamp }}'
+down_revision = {% if down_revision %}'{{ down_revision }}'{% else %}None{% endif %}
+
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    """Create {{ table_name }} table."""
+    op.create_table(
+        '{{ table_name }}',
+        sa.Column('id', sa.UUID(as_uuid=True), primary_key=True, default=uuid.uuid4),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+{%- for attr in attributes %}
+        sa.Column('{{ attr.name }}', sa.{{ attr.sqlalchemy_type }}{% if not attr.nullable %}, nullable=False{% endif %}),
+{%- endfor %}
+    )
+
+
+def downgrade() -> None:
+    """Drop {{ table_name }} table."""
+    op.drop_table('{{ table_name }}')
