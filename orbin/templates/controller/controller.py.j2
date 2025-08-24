@@ -1,0 +1,121 @@
+"""
+{{ class_name }} - FastAPI controller for {{ controller_name }}.
+
+This controller handles HTTP requests for {{ controller_name }} resources.
+Generated on {{ timestamp.split('T')[0] }}
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+from typing import List, Optional
+from pydantic import BaseModel
+
+from config.database import get_db
+
+
+# Create router for {{ controller_name }} routes
+router = APIRouter(
+    prefix="{{ route_prefix }}",
+    tags=["{{ controller_name }}"]
+)
+
+
+# Pydantic models (you may want to move these to a separate schemas file)
+class {{ class_name.replace('Controller', '') }}Base(BaseModel):
+    """Base schema for {{ controller_name }}."""
+    pass
+
+
+class {{ class_name.replace('Controller', '') }}Create({{ class_name.replace('Controller', '') }}Base):
+    """Schema for creating {{ controller_name }}."""
+    pass
+
+
+class {{ class_name.replace('Controller', '') }}Update({{ class_name.replace('Controller', '') }}Base):
+    """Schema for updating {{ controller_name }}."""
+    pass
+
+
+class {{ class_name.replace('Controller', '') }}Response({{ class_name.replace('Controller', '') }}Base):
+    """Schema for {{ controller_name }} responses."""
+    id: str
+    
+    class Config:
+        from_attributes = True
+
+
+class {{ class_name }}:
+    """Controller for {{ controller_name }} operations."""
+
+{%- for action in actions %}
+    
+    @staticmethod
+    @router.{{ action.method.lower() }}("{{ action.path }}")
+    async def {{ action.function_name }}(
+        {%- if action.path and '{id}' in action.path %}
+        id: str,
+        {%- endif %}
+        {%- if action.method in ['POST', 'PUT', 'PATCH'] %}
+        {%- if action.name == 'create' %}
+        {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}_data: {{ class_name.replace('Controller', '') }}Create,
+        {%- elif action.name in ['update'] %}
+        {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}_data: {{ class_name.replace('Controller', '') }}Update,
+        {%- endif %}
+        {%- endif %}
+        db: Session = Depends(get_db)
+    ) -> {{ 'List[' + class_name.replace('Controller', '') + 'Response]' if action.name == 'index' else class_name.replace('Controller', '') + 'Response' if action.name != 'destroy' else 'dict' }}:
+        """{{ action.description }}."""
+        {%- if action.name == 'index' %}
+        # TODO: Implement logic to fetch all {{ controller_name }}
+        # Example:
+        # {{ controller_name }} = db.query({{ class_name.replace('Controller', '') }}).all()
+        # return {{ controller_name }}
+        return []
+        {%- elif action.name == 'show' %}
+        # TODO: Implement logic to fetch {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} by ID
+        # Example:
+        # {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} = db.query({{ class_name.replace('Controller', '') }}).filter({{ class_name.replace('Controller', '') }}.id == id).first()
+        # if not {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}:
+        #     raise HTTPException(status_code=404, detail="{{ class_name.replace('Controller', '') }} not found")
+        # return {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}
+        raise HTTPException(status_code=501, detail="Not implemented")
+        {%- elif action.name == 'create' %}
+        # TODO: Implement logic to create new {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}
+        # Example:
+        # {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} = {{ class_name.replace('Controller', '') }}(**{{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}_data.dict())
+        # db.add({{ controller_name[:-1] if controller_name.endswith('s') else controller_name }})
+        # db.commit()
+        # db.refresh({{ controller_name[:-1] if controller_name.endswith('s') else controller_name }})
+        # return {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}
+        raise HTTPException(status_code=501, detail="Not implemented")
+        {%- elif action.name == 'update' %}
+        # TODO: Implement logic to update {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}
+        # Example:
+        # {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} = db.query({{ class_name.replace('Controller', '') }}).filter({{ class_name.replace('Controller', '') }}.id == id).first()
+        # if not {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}:
+        #     raise HTTPException(status_code=404, detail="{{ class_name.replace('Controller', '') }} not found")
+        # for key, value in {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}_data.dict(exclude_unset=True).items():
+        #     setattr({{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}, key, value)
+        # db.commit()
+        # return {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}
+        raise HTTPException(status_code=501, detail="Not implemented")
+        {%- elif action.name in ['destroy', 'delete'] %}
+        # TODO: Implement logic to delete {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}
+        # Example:
+        # {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }} = db.query({{ class_name.replace('Controller', '') }}).filter({{ class_name.replace('Controller', '') }}.id == id).first()
+        # if not {{ controller_name[:-1] if controller_name.endswith('s') else controller_name }}:
+        #     raise HTTPException(status_code=404, detail="{{ class_name.replace('Controller', '') }} not found")
+        # db.delete({{ controller_name[:-1] if controller_name.endswith('s') else controller_name }})
+        # db.commit()
+        # return {"message": "{{ class_name.replace('Controller', '') }} deleted successfully"}
+        raise HTTPException(status_code=501, detail="Not implemented")
+        {%- else %}
+        # TODO: Implement custom action logic for {{ action.name }}
+        # This is a custom action - implement your business logic here
+        raise HTTPException(status_code=501, detail="Not implemented")
+        {%- endif %}
+{%- endfor %}
+
+
+# Export the router to be included in the main app
+__all__ = ["router", "{{ class_name }}"]

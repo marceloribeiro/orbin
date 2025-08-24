@@ -5,5 +5,6 @@ Contains various generators for scaffolding applications, models, controllers, e
 """
 
 from .app_generator import AppGenerator
+from .controller_generator import ControllerGenerator
 
-__all__ = ['AppGenerator']
+__all__ = ['AppGenerator', 'ControllerGenerator']

@@ -167,3 +167,4 @@ cython_debug/
 # Windows
 Thumbs.db
 prompts/
+controller_test_app/

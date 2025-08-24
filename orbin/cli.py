@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import Optional, List
 from .generators.app_generator import AppGenerator
 from .generators.model_generator import ModelGenerator
+from .generators.controller_generator import ControllerGenerator
+from .generators.resource_generator import ResourceGenerator
+from .generators.scaffold_generator import ScaffoldGenerator
 from .database import create_database, migrate_database
 
 
@@ -61,6 +64,39 @@ def generate_model(model_name: str, attributes: List[str]):
         sys.exit(1)
     
     generator = ModelGenerator(model_name, attributes)
+    generator.generate()
+
+
+def generate_controller(controller_name: str, actions: List[str]):
+    """Generate a new controller with specified actions."""
+    if not is_orbin_app():
+        print("❌ Error: Not in an Orbin application directory")
+        print("Run this command from within an Orbin app directory")
+        sys.exit(1)
+    
+    generator = ControllerGenerator(controller_name, actions)
+    generator.generate()
+
+
+def generate_resource(model_name: str):
+    """Generate a RESTful controller for an existing model."""
+    if not is_orbin_app():
+        print("❌ Error: Not in an Orbin application directory")
+        print("Run this command from within an Orbin app directory")
+        sys.exit(1)
+    
+    generator = ResourceGenerator(model_name)
+    generator.generate()
+
+
+def generate_scaffold(model_name: str, attributes: List[str]):
+    """Generate complete CRUD scaffolding: model + migration + controller."""
+    if not is_orbin_app():
+        print("❌ Error: Not in an Orbin application directory")
+        print("Run this command from within an Orbin app directory")
+        sys.exit(1)
+    
+    generator = ScaffoldGenerator(model_name, attributes)
     generator.generate()
 
 
@@ -250,6 +286,23 @@ def main():
         model_parser.add_argument("model_name", help="Name of the model (singular or plural)")
         model_parser.add_argument("attributes", nargs="*", help="Model attributes (e.g., name:string age:integer)")
         
+        # Generate controller command
+        controller_parser = generate_subparsers.add_parser("controller", help="Generate a controller with actions")
+        controller_parser.add_argument("controller_name", help="Name of the controller (e.g., Users, PostsController)")
+        controller_parser.add_argument("actions", nargs="*", help="Controller actions (e.g., index show create update destroy)")
+        
+        # Set default actions if none provided
+        controller_parser.set_defaults(actions=["index", "show", "create", "update", "destroy"])
+        
+        # Generate resource command
+        resource_parser = generate_subparsers.add_parser("resource", help="Generate RESTful controller for existing model")
+        resource_parser.add_argument("model_name", help="Name of the existing model (e.g., User, Post)")
+        
+        # Generate scaffold command
+        scaffold_parser = generate_subparsers.add_parser("scaffold", help="Generate model + migration + RESTful controller")
+        scaffold_parser.add_argument("model_name", help="Name of the model to create (e.g., User, Post)")
+        scaffold_parser.add_argument("attributes", nargs="*", help="Model attributes (e.g., name:string email:string)")
+        
         # Database commands
         db_create_parser = subparsers.add_parser("db-create", help="Create the PostgreSQL database")
         db_migrate_parser = subparsers.add_parser("db-migrate", help="Run database migrations")
@@ -292,8 +345,16 @@ def main():
     elif args.command in ["generate", "g"]:
         if args.generate_type == "model":
             generate_model(args.model_name, args.attributes)
+        elif args.generate_type == "controller":
+            # Use default actions if none provided
+            actions = args.actions if args.actions else ["index", "show", "create", "update", "destroy"]
+            generate_controller(args.controller_name, actions)
+        elif args.generate_type == "resource":
+            generate_resource(args.model_name)
+        elif args.generate_type == "scaffold":
+            generate_scaffold(args.model_name, args.attributes)
         else:
-            print("❌ Error: Unknown generate type. Available: model")
+            print("❌ Error: Unknown generate type. Available: model, controller, resource, scaffold")
             sys.exit(1)
     elif args.command == "db-create":
         db_create()

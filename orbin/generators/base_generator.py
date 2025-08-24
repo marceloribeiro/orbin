@@ -184,3 +184,65 @@ class BaseGenerator:
                 print(f"⚠️  Warning: Command failed: {command}")
                 print(f"Error: {e}")
             raise
+    
+    def add_route_to_app(self, route_name: str, controller_name: str):
+        """
+        Automatically add a new route to the main app routes.
+        
+        Args:
+            route_name: Name of the route (e.g., "users", "products")
+            controller_name: Name of the controller (e.g., "users", "products")
+        """
+        # We're generating from the current working directory, not output_path
+        routes_init_path = Path.cwd() / "app" / "routes" / "__init__.py"
+        
+        if not routes_init_path.exists():
+            print(f"⚠️  Warning: Routes init file not found: {routes_init_path}")
+            return
+        
+        content = routes_init_path.read_text()
+        
+        # Check if import already exists
+        import_line = f"from app.controllers.{controller_name}_controller import router as {route_name}_router"
+        include_line = f'router.include_router({route_name}_router, prefix="/{route_name}", tags=["{route_name}"])'
+        
+        if import_line in content:
+            print(f"📄 Route already imported: {controller_name}_controller")
+            return
+        
+        # Add import after existing imports or at the top
+        lines = content.split('\n')
+        new_lines = []
+        import_added = False
+        include_added = False
+        
+        for i, line in enumerate(lines):
+            new_lines.append(line)
+            
+            # Add import after the APIRouter import
+            if not import_added and 'from fastapi import APIRouter' in line:
+                new_lines.append('')
+                new_lines.append(import_line)
+                import_added = True
+            
+            # Add include after router = APIRouter()
+            if not include_added and 'router = APIRouter()' in line:
+                new_lines.append('')
+                new_lines.append(f'# Include {controller_name} routes')
+                new_lines.append(include_line)
+                include_added = True
+        
+        # If we couldn't find the right place, add at the end
+        if not import_added:
+            new_lines.append('')
+            new_lines.append(import_line)
+        
+        if not include_added:
+            new_lines.append('')
+            new_lines.append(f'# Include {controller_name} routes')
+            new_lines.append(include_line)
+        
+        # Write updated content
+        routes_init_path.write_text('\n'.join(new_lines))
+        print(f"📄 Added route to app: /{route_name} → {controller_name}_controller")
+        print(f"📄 Updated: app/routes/__init__.py")
