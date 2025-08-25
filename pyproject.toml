@@ -6,15 +6,16 @@ build-backend = "setuptools.build_meta"
 name = "orbin"
 version = "0.1.0"
 authors = [
-    {name = "Your Name", email = "your.email@example.com"},
+    {name = "Marcelo Ribeiro", email = "marcelo@floox.ai"},
 ]
-description = "Framework for AI-powered chat applications built on FastAPI"
+description = "A powerful framework for building AI-powered chat applications with FastAPI"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.8"
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
@@ -25,8 +26,33 @@ classifiers = [
     "Framework :: FastAPI",
     "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
     "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Communications :: Chat",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Database",
 ]
-keywords = ["fastapi", "ai", "chat", "framework", "websocket", "sqlalchemy"]
+keywords = [
+    "fastapi", 
+    "ai", 
+    "chat", 
+    "framework", 
+    "generators", 
+    "sqlalchemy", 
+    "alembic",
+    "redis",
+    "caching",
+    "sessions",
+    "convention-over-configuration",
+    "crud",
+    "restful",
+    "orm",
+    "migration",
+    "scaffold",
+    "agent",
+    "chatbot",
+    "websocket",
+    "realtime"
+]
 dependencies = [
     "fastapi>=0.104.1",
     "uvicorn[standard]>=0.24.0", 
@@ -37,6 +63,7 @@ dependencies = [
     "ipython>=8.0.0",
     "jinja2>=3.0.0",
     "inflect>=7.0.0",
+    "redis>=5.0.0",
 ]
 
 [project.optional-dependencies]
@@ -49,9 +76,11 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/yourusername/orbin"
-"Bug Reports" = "https://github.com/yourusername/orbin/issues"
-"Source" = "https://github.com/yourusername/orbin"
+"Homepage" = "https://github.com/marceloribeiro/orbin"
+"Documentation" = "https://github.com/marceloribeiro/orbin#readme"
+"Repository" = "https://github.com/marceloribeiro/orbin"
+"Bug Reports" = "https://github.com/marceloribeiro/orbin/issues"
+"Changelog" = "https://github.com/marceloribeiro/orbin/blob/main/README.md#changelog"
 
 [project.scripts]
 orbin = "orbin.cli:main"

@@ -180,6 +180,92 @@ def db_console():
         print("\n👋 Database console closed")
 
 
+def redis_console():
+    """Open an interactive Redis console using redis-cli."""
+    if not is_orbin_app():
+        print("❌ Error: Not in an Orbin application directory")
+        print("Run this command from within an Orbin app directory")
+        sys.exit(1)
+    
+    # Load Redis URL from environment
+    from dotenv import load_dotenv
+    load_dotenv(Path.cwd() / ".env")
+    
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+    app_name = get_app_name()
+    print(f"🔴 Opening Redis console for {app_name}")
+    print("💡 Type quit to exit the console")
+    print("📚 Common commands: KEYS *, GET key, SET key value, INFO")
+    print()
+    
+    try:
+        # Parse Redis URL for redis-cli
+        from urllib.parse import urlparse
+        parsed = urlparse(redis_url)
+        
+        cmd = ["redis-cli"]
+        if parsed.hostname:
+            cmd.extend(["-h", parsed.hostname])
+        if parsed.port:
+            cmd.extend(["-p", str(parsed.port)])
+        if parsed.password:
+            cmd.extend(["-a", parsed.password])
+        if parsed.path and len(parsed.path) > 1:
+            db = parsed.path.lstrip('/')
+            cmd.extend(["-n", db])
+        
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Error opening Redis console: {e}")
+        print("💡 Make sure Redis client (redis-cli) is installed")
+        sys.exit(1)
+    except FileNotFoundError:
+        print("❌ Error: redis-cli command not found")
+        print("💡 Please install Redis client tools:")
+        print("   - macOS: brew install redis")
+        print("   - Ubuntu: sudo apt-get install redis-tools")
+        print("   - Windows: Download from https://redis.io/download")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\n👋 Redis console closed")
+
+
+def redis_ping():
+    """Test Redis connection."""
+    if not is_orbin_app():
+        print("❌ Error: Not in an Orbin application directory")
+        print("Run this command from within an Orbin app directory")
+        sys.exit(1)
+    
+    try:
+        # Add current directory to Python path to import app modules
+        sys.path.insert(0, os.getcwd())
+        
+        from orbin.redis_client import get_redis_client
+        from dotenv import load_dotenv
+        load_dotenv(Path.cwd() / ".env")
+        
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        
+        print("🔴 Testing Redis connection...")
+        client = get_redis_client(redis_url)
+        
+        if client.ping():
+            info = client.get_info()
+            print("✅ Redis connection successful!")
+            print(f"📊 Redis version: {info.get('redis_version', 'unknown')}")
+            print(f"🗃️  Connected clients: {info.get('connected_clients', 'unknown')}")
+            print(f"💾 Used memory: {info.get('used_memory_human', 'unknown')}")
+        else:
+            print("❌ Redis connection failed")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"❌ Error connecting to Redis: {e}")
+        print("💡 Make sure Redis server is running and connection details are correct")
+        sys.exit(1)
+
+
 def start_server(bind: str = "127.0.0.1", port: int = 8000):
     """Start the development server."""
     if not is_orbin_app():
@@ -288,6 +374,7 @@ def start_console():
     print("  - app.main (FastAPI app)")
     print("  - config.settings (App settings)")
     print("  - config.database (Database connection)")
+    print("  - config.redis (Redis client)")
     
     # Create startup script for the console
     startup_script = """
@@ -319,6 +406,12 @@ try:
 except ImportError as e:
     print(f"⚠️  Could not import config.database: {e}")
 
+try:
+    from config.redis import redis_client, cache_set, cache_get
+    print("✅ Imported: redis_client, cache_set, cache_get (Redis)")
+except ImportError as e:
+    print(f"⚠️  Could not import config.redis: {e}")
+
 # Try to import SQLAlchemy session
 try:
     from sqlalchemy.orm import sessionmaker
@@ -328,7 +421,7 @@ try:
 except ImportError as e:
     print(f"⚠️  Could not create database session: {e}")
 
-print("\\n🎯 Ready! Try: app.title, settings.APP_NAME, or session.execute('SELECT 1')")
+print("\\n🎯 Ready! Try: app.title, settings.APP_NAME, redis_client.ping(), or session.execute('SELECT 1')")
 print("📚 Type help() for Python help, or dir() to see available objects")
 """
     
@@ -453,6 +546,10 @@ def main():
         db_test_prepare_parser = subparsers.add_parser("db-test-prepare", help="Prepare test database as schema copy of development database")
         db_console_parser = subparsers.add_parser("db", help="Open interactive database console (psql)")
         
+        # Redis commands
+        redis_console_parser = subparsers.add_parser("redis", help="Open interactive Redis console (redis-cli)")
+        redis_ping_parser = subparsers.add_parser("redis-ping", help="Test Redis connection")
+        
         # Version command
         version_parser = subparsers.add_parser("version", help="Show Orbin version")
         
@@ -512,6 +609,10 @@ def main():
         db_test_prepare()
     elif args.command == "db":
         db_console()
+    elif args.command == "redis":
+        redis_console()
+    elif args.command == "redis-ping":
+        redis_ping()
     elif args.command == "version":
         from . import __version__
         print(f"Orbin {__version__}")

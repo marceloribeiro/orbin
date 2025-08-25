@@ -1,0 +1,61 @@
+"""
+Redis client configuration for {{ app_name }}.
+"""
+
+from orbin.redis_client import get_redis_client, RedisClient
+from config.settings import settings
+
+
+def get_redis() -> RedisClient:
+    """Get configured Redis client for the application."""
+    return get_redis_client(settings.REDIS_URL)
+
+
+# Initialize Redis client
+redis_client = get_redis()
+
+
+# Convenience functions for common operations
+def cache_set(key: str, value, ttl: int = 3600) -> bool:
+    """Cache a value with TTL."""
+    return redis_client.cache_set(key, value, ttl)
+
+
+def cache_get(key: str):
+    """Get cached value."""
+    return redis_client.cache_get(key)
+
+
+def cache_get_json(key: str) -> dict:
+    """Get cached JSON value."""
+    return redis_client.cache_get_json(key)
+
+
+def store_conversation(conversation_id: str, messages: list, ttl: int = None) -> bool:
+    """Store conversation messages."""
+    return redis_client.store_conversation(conversation_id, messages, ttl)
+
+
+def get_conversation(conversation_id: str) -> list:
+    """Get conversation messages."""
+    return redis_client.get_conversation(conversation_id)
+
+
+def store_user_session(user_id: str, session_data: dict, ttl: int = 3600) -> bool:
+    """Store user session data."""
+    return redis_client.store_user_session(user_id, session_data, ttl)
+
+
+def get_user_session(user_id: str) -> dict:
+    """Get user session data."""
+    return redis_client.get_user_session(user_id)
+
+
+def publish_message(channel: str, message: str) -> int:
+    """Publish real-time message."""
+    return redis_client.publish(channel, message)
+
+
+def subscribe_to_channels(*channels: str):
+    """Subscribe to real-time channels."""
+    return redis_client.subscribe(*channels)
